@@ -1,0 +1,34 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.83.0
+        with:
+          components: clippy, rustfmt
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: cargo fmt --check
+      - run: cargo clippy --all-targets --all-features -- -D warnings
+      - run: cargo test
+      - run: cargo build --release
+      - name: Execute first-launch languages
+        run: |
+          set -euo pipefail
+          ./target/release/aegis-core run --language c --file examples/hello.c
+          ./target/release/aegis-core run --language cpp --file examples/hello.cpp
+          ./target/release/aegis-core run --language python --file examples/hello.py
+          ./target/release/aegis-core run --language javascript --file examples/hello.js
+          ./target/release/aegis-core run --language typescript --file examples/hello.ts
+          ./target/release/aegis-core run --language go --file examples/hello.go

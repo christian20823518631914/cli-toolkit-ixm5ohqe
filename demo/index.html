@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Aegis Core Demo</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #fcfcfc;
+      --panel: #f3f3f3;
+      --line: #14141413;
+      --text: #141414eb;
+      --muted: #14141499;
+      --accent: #3c7cab;
+      --ok: #1f8a65;
+      --err: #cf2d56;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    body { margin: 0; background: var(--bg); color: var(--text); }
+    main { max-width: 1180px; margin: 32px auto; padding: 0 20px; }
+    .shell { border: 1px solid var(--line); border-radius: 18px; overflow: hidden; background: white; box-shadow: 0 22px 80px #00000012; }
+    header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 16px; background: var(--panel); border-bottom: 1px solid var(--line); }
+    h1 { font-size: 15px; margin: 0; letter-spacing: -0.02em; }
+    .badge { color: var(--muted); font-size: 12px; }
+    .toolbar { display: flex; gap: 10px; align-items: center; }
+    select, button { border: 1px solid var(--line); border-radius: 12px; background: white; color: var(--text); padding: 9px 12px; font: inherit; }
+    button { background: var(--text); color: white; cursor: pointer; font-weight: 650; }
+    .grid { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(320px, .8fr); min-height: 620px; }
+    textarea { width: 100%; height: 100%; box-sizing: border-box; border: 0; resize: none; padding: 22px; font: 14px/1.65 "JetBrains Mono", "SFMono-Regular", Consolas, monospace; outline: none; color: var(--text); background: #fff; }
+    aside { border-left: 1px solid var(--line); background: #fbfbfb; display: flex; flex-direction: column; }
+    .metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 16px; border-bottom: 1px solid var(--line); }
+    .metric { background: white; border: 1px solid var(--line); border-radius: 14px; padding: 10px; }
+    .metric b { display: block; font-size: 18px; letter-spacing: -0.03em; }
+    .metric span { color: var(--muted); font-size: 12px; }
+    pre { margin: 0; padding: 18px; overflow: auto; white-space: pre-wrap; font: 13px/1.55 "JetBrains Mono", Consolas, monospace; }
+    .stdout { flex: 1; color: var(--ok); }
+    .stderr { min-height: 120px; border-top: 1px solid var(--line); color: var(--err); background: #fff; }
+    @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } aside { border-left: 0; border-top: 1px solid var(--line); } }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="shell">
+      <header>
+        <div>
+          <h1>Aegis Core</h1>
+          <div class="badge">Rust execution core · first languages · constrained demo mode</div>
+        </div>
+        <div class="toolbar">
+          <select id="language"></select>
+          <button id="run">Run</button>
+        </div>
+      </header>
+      <div class="grid">
+        <textarea id="code" spellcheck="false"></textarea>
+        <aside>
+          <div class="metrics">
+            <div class="metric"><b id="status">idle</b><span>status</span></div>
+            <div class="metric"><b id="total">–</b><span>total</span></div>
+            <div class="metric"><b id="compile">–</b><span>compile</span></div>
+          </div>
+          <pre id="stdout" class="stdout">Select a language and run the bundled sample.</pre>
+          <pre id="stderr" class="stderr"></pre>
+        </aside>
+      </div>
+    </div>
+  </main>
+  <script>
+    const samples = {"c":"#include <stdio.h>\n\nint main(void) {\n    puts(\"aegis/c: hello in a constrained process\");\n    return 0;\n}\n","cpp":"#include <iostream>\n#include <vector>\n\nint main() {\n    std::vector<int> xs{1, 2, 3, 5, 8};\n    int sum = 0;\n    for (int x : xs) sum += x;\n    std::cout << \"aegis/cpp: \" << sum << \"\\n\";\n}\n","go":"package main\n\nimport \"fmt\"\n\nfunc main() {\n    xs := []int{1, 2, 3, 5, 8}\n    sum := 0\n    for _, x := range xs {\n        sum += x\n    }\n    fmt.Println(\"aegis/go:\", sum)\n}\n","javascript":"const xs = [1, 2, 3, 5, 8];\nconsole.log(\"aegis/javascript:\", xs.reduce((a, b) => a + b, 0));\n","python":"print(\"aegis/python:\", sum([1, 2, 3, 5, 8]))\n","typescript":"type Label = string;\n\nfunction score(xs: number[]): number {\n  return xs.reduce((a: number, b: number) => a + b, 0);\n}\n\nconst label: Label = \"aegis/typescript:\";\nconsole.log(label, score([1, 2, 3, 5, 8]));\n"};
+    const names = {
+      c: "C", cpp: "C++", python: "Python", javascript: "JavaScript", typescript: "TypeScript", go: "Go"
+    };
+    const language = document.getElementById("language");
+    const code = document.getElementById("code");
+    const stdout = document.getElementById("stdout");
+    const stderr = document.getElementById("stderr");
+    const status = document.getElementById("status");
+    const total = document.getElementById("total");
+    const compile = document.getElementById("compile");
+    for (const id of Object.keys(samples)) {
+      const option = document.createElement("option");
+      option.value = id;
+      option.textContent = names[id];
+      language.append(option);
+    }
+    function loadSample() {
+      code.value = samples[language.value];
+      stdout.textContent = "";
+      stderr.textContent = "";
+      status.textContent = "idle";
+      total.textContent = "–";
+      compile.textContent = "–";
+    }
+    language.addEventListener("change", loadSample);
+    document.getElementById("run").addEventListener("click", async () => {
+      status.textContent = "running";
+      stdout.textContent = "Compiling / executing...";
+      stderr.textContent = "";
+      const response = await fetch("/v1/run", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ language: language.value, code: code.value })
+      });
+      const result = await response.json();
+      status.textContent = result.status;
+      total.textContent = `${result.total_ms}ms`;
+      compile.textContent = `${result.compile_ms}ms`;
+      stdout.textContent = result.stdout || "";
+      stderr.textContent = result.stderr || result.error || "";
+    });
+    language.value = "c";
+    loadSample();
+  </script>
+</body>
+</html>

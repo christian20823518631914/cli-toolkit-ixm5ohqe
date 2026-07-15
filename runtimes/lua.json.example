@@ -1,0 +1,19 @@
+{
+  "id": "lua",
+  "display_name": "Lua 5.4",
+  "aliases": ["lua54"],
+  "kind": "interpreted",
+  "source_file": "main.lua",
+  "toolchain": ["lua"],
+  "memory_mb": 64,
+  "timeout_ms": 1000,
+  "compile": [],
+  "run": {
+    "program": "lua",
+    "args": ["{workspace}/main.lua"],
+    "timeout_ms": 1000,
+    "memory_mb": 64
+  },
+  "sample": "print('aegis/lua: hello')\n",
+  "transform": "none"
+}
