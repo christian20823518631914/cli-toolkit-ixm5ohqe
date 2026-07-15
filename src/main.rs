@@ -29,6 +29,8 @@ const DEFAULT_COMPILE_TIMEOUT_MS: u64 = 2_000;
 const DEFAULT_RUN_TIMEOUT_MS: u64 = 1_000;
 const DEFAULT_COMPILE_MEMORY_MB: u64 = 384;
 const GO_COMPILE_TIMEOUT_MS: u64 = 30_000;
+const DEFAULT_FILE_LIMIT_BYTES: u64 = 2 * 1024 * 1024;
+const GO_COMPILE_FILE_LIMIT_BYTES: u64 = 64 * 1024 * 1024;
 const SAFE_PATH: &str = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
 
 #[derive(Parser)]
@@ -122,6 +124,8 @@ struct Step {
     args: Vec<String>,
     timeout_ms: u64,
     memory_mb: u64,
+    #[serde(default = "default_file_limit_bytes")]
+    file_limit_bytes: u64,
 }
 
 #[derive(Deserialize)]
@@ -617,9 +621,10 @@ async fn execute_step(
         .stderr(std::process::Stdio::piped());
     let timeout_ms = timeout_override_ms.unwrap_or(step.timeout_ms);
     let memory_mb = step.memory_mb;
+    let file_limit_bytes = step.file_limit_bytes;
     unsafe {
         command.pre_exec(move || {
-            set_process_limits(timeout_ms, memory_mb)?;
+            set_process_limits(timeout_ms, memory_mb, file_limit_bytes)?;
             Ok(())
         });
     }
@@ -694,14 +699,18 @@ where
     Ok(LimitedRead { data, truncated })
 }
 
-fn set_process_limits(timeout_ms: u64, memory_mb: u64) -> std::io::Result<()> {
+fn set_process_limits(
+    timeout_ms: u64,
+    memory_mb: u64,
+    file_limit_bytes: u64,
+) -> std::io::Result<()> {
     let cpu_seconds = (timeout_ms / 1_000).saturating_add(2).max(1);
     set_rlimit(libc::RLIMIT_CPU, cpu_seconds, cpu_seconds)?;
     if memory_mb > 0 {
         let memory_bytes = memory_mb.saturating_mul(1024 * 1024);
         set_rlimit(libc::RLIMIT_AS, memory_bytes, memory_bytes)?;
     }
-    set_rlimit(libc::RLIMIT_FSIZE, 2 * 1024 * 1024, 2 * 1024 * 1024)?;
+    set_rlimit(libc::RLIMIT_FSIZE, file_limit_bytes, file_limit_bytes)?;
     set_rlimit(libc::RLIMIT_CORE, 0, 0)?;
     let rc = unsafe { libc::setpgid(0, 0) };
     if rc != 0 {
@@ -928,7 +937,25 @@ fn step(program: &str, args: &[&str], timeout_ms: u64, memory_mb: u64) -> Step {
         args: args.iter().map(ToString::to_string).collect(),
         timeout_ms,
         memory_mb,
+        file_limit_bytes: default_file_limit_bytes(),
     }
+}
+
+fn step_with_file_limit(
+    program: &str,
+    args: &[&str],
+    timeout_ms: u64,
+    memory_mb: u64,
+    file_limit_bytes: u64,
+) -> Step {
+    Step {
+        file_limit_bytes,
+        ..step(program, args, timeout_ms, memory_mb)
+    }
+}
+
+fn default_file_limit_bytes() -> u64 {
+    DEFAULT_FILE_LIMIT_BYTES
 }
 
 fn default_runtimes() -> Vec<Runtime> {
@@ -1062,11 +1089,12 @@ fn default_runtimes() -> Vec<Runtime> {
                 memory_mb: 128,
                 timeout_ms: DEFAULT_RUN_TIMEOUT_MS,
             },
-            compile: vec![step(
+            compile: vec![step_with_file_limit(
                 "go",
                 &["build", "-o", "{binary}", "{go_source}"],
                 GO_COMPILE_TIMEOUT_MS,
                 0,
+                GO_COMPILE_FILE_LIMIT_BYTES,
             )],
             run: step("{binary}", &[], DEFAULT_RUN_TIMEOUT_MS, 0),
             sample: GO_SAMPLE.to_string(),
@@ -1268,6 +1296,10 @@ mod tests {
         assert_eq!(
             engine.runtime_for("go").unwrap().compile[0].timeout_ms,
             GO_COMPILE_TIMEOUT_MS
+        );
+        assert_eq!(
+            engine.runtime_for("go").unwrap().compile[0].file_limit_bytes,
+            GO_COMPILE_FILE_LIMIT_BYTES
         );
     }
 

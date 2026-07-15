@@ -19,6 +19,8 @@ Supported placeholders:
 - `{go_source}`
 - `{binary}`
 
+Each step may set `file_limit_bytes`; omitted values default to 2 MiB. Compiler steps that legitimately create larger temporary archives should opt into a narrowly sized higher limit.
+
 Manifests are administrator configuration, not user input. Keep command vectors fixed and never expose manifest installation through the execution API.
 
 The process backend resolves executables only from its fixed safe `PATH`. A Firecracker backend should interpret the same command vectors inside the selected runtime image.
