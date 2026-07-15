@@ -28,6 +28,7 @@ const DEFAULT_OUTPUT_LIMIT: usize = 64 * 1024;
 const DEFAULT_COMPILE_TIMEOUT_MS: u64 = 2_000;
 const DEFAULT_RUN_TIMEOUT_MS: u64 = 1_000;
 const DEFAULT_COMPILE_MEMORY_MB: u64 = 384;
+const GO_COMPILE_TIMEOUT_MS: u64 = 30_000;
 const SAFE_PATH: &str = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
 
 #[derive(Parser)]
@@ -1064,7 +1065,7 @@ fn default_runtimes() -> Vec<Runtime> {
             compile: vec![step(
                 "go",
                 &["build", "-o", "{binary}", "{go_source}"],
-                8_000,
+                GO_COMPILE_TIMEOUT_MS,
                 0,
             )],
             run: step("{binary}", &[], DEFAULT_RUN_TIMEOUT_MS, 0),
@@ -1264,6 +1265,10 @@ mod tests {
         assert_eq!(engine.runtime_for("c++").unwrap().info.id, "cpp");
         assert_eq!(engine.runtime_for("TS").unwrap().info.id, "typescript");
         assert_eq!(engine.runtime_for("golang").unwrap().info.id, "go");
+        assert_eq!(
+            engine.runtime_for("go").unwrap().compile[0].timeout_ms,
+            GO_COMPILE_TIMEOUT_MS
+        );
     }
 
     #[test]
